@@ -1,0 +1,47 @@
+From 87ba0b5d803d5db088732a4445149f6be6911b8a Mon Sep 17 00:00:00 2001
+From: Bastien Nocera <hadess@hadess.net>
+Date: Thu, 28 Jan 2010 11:17:24 +0000
+Subject: [PATCH 2/2] Don't lose special D-Bus error sauce when copying
+
+When copying errors for later use, make sure to copy D-Bus
+errors special sauce (domain name of the error copied after the
+string itself).
+
+Fixes possible crashers in geoclue-master when returning a
+cached provider error.
+
+See:
+https://bugzilla.redhat.com/show_bug.cgi?id=528897#c15
+
+With debugging help from Colin Walters and Matthias Clasen.
+---
+ src/master-provider.c |   13 +++++++++++++
+ 1 files changed, 13 insertions(+), 0 deletions(-)
+
+diff --git a/src/master-provider.c b/src/master-provider.c
+index c54919a..dd49ee7 100644
+--- a/src/master-provider.c
++++ b/src/master-provider.c
+@@ -126,6 +126,19 @@ copy_error (GError **target, GError *source)
+ 	}
+ 	if (source) {
+ 		*target = g_error_copy (source);
++
++		/* If the error type is a D-Bus remote exception,
++		 * don't lose the "magic" sauce after the message string.
++		 * See the code in gerror_to_dbus_error_message() in dbus-glib */
++		if (source->domain == DBUS_GERROR &&
++		    source->code == DBUS_GERROR_REMOTE_EXCEPTION) {
++			int len;
++			g_free ((*target)->message);
++			len = strlen (source->message);
++			len += strlen (source->message + len + 1);
++			len += 2;
++			(*target)->message = g_memdup (source->message, len);
++		}
+ 	}
+ }
+ 
+-- 
+1.6.6
+
